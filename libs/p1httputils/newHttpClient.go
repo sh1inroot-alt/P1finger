@@ -27,6 +27,21 @@ func NewHttpClientBuilder() *HttpClientBuilder {
 	}
 }
 
+func (b *HttpClientBuilder) Build() *http.Client {
+	client := &http.Client{
+		Timeout:   b.timeout,
+		Transport: b.transport,
+	}
+
+	if !b.followRedirect {
+		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	}
+
+	return client
+}
+
 func (b *HttpClientBuilder) WithTimeout(timeout time.Duration) *HttpClientBuilder {
 	b.timeout = timeout
 	return b
@@ -60,19 +75,4 @@ func (b *HttpClientBuilder) WithProxy(proxyAddr string) *HttpClientBuilder {
 func (b *HttpClientBuilder) NoRedirect() *HttpClientBuilder {
 	b.followRedirect = false
 	return b
-}
-
-func (b *HttpClientBuilder) Build() *http.Client {
-	client := &http.Client{
-		Timeout:   b.timeout,
-		Transport: b.transport,
-	}
-
-	if !b.followRedirect {
-		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		}
-	}
-
-	return client
 }

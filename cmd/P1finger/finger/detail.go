@@ -30,8 +30,6 @@ var detailCmd = &cobra.Command{
 
 func fingerDetail(fingerName string) {
 	p1ruleClient, err := RuleClient.NewRuleClientBuilder().
-		WithCustomizeFingerFile(vars.AppConf.CustomizeFingerFiles).
-		WithDefaultFingerFiles(vars.AppConf.UseDefaultFingerFiles).
 		WithOutputFormat(vars.Options.Output).
 		WithTimeout(10 * time.Second).
 		Build()

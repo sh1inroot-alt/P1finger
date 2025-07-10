@@ -14,7 +14,7 @@ var (
 	reTitle = regexp.MustCompile(`(?im)<\s*title.*>(.*?)<\s*/\s*title>`)
 )
 
-func ExtractTitle(r *P1fingerHttpResp) (title string) {
+func ExtractTitle(r *HttpRespUtils) (title string) {
 	// Try to parse the DOM
 	titleDom, err := getTitleWithDom(r)
 	// In case of error fallback to regex
@@ -36,7 +36,7 @@ func ExtractTitle(r *P1fingerHttpResp) (title string) {
 	return title
 }
 
-func getTitleWithDom(r *P1fingerHttpResp) (*html.Node, error) {
+func getTitleWithDom(r *HttpRespUtils) (*html.Node, error) {
 	var title *html.Node
 	var crawler func(*html.Node)
 	crawler = func(node *html.Node) {

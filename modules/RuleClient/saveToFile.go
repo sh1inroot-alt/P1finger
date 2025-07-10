@@ -1,10 +1,12 @@
 package RuleClient
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/projectdiscovery/gologger"
@@ -20,8 +22,8 @@ func SaveToFile(DetectResult []DetectResult, output string) (err error) {
 	outputType = strings.ToLower(outputType)
 
 	switch outputType {
-	case "xlsx":
-		err = SaveToExcel(DetectResult, output)
+	case "csv":
+		err = SaveToCsv(DetectResult, output)
 		if err != nil {
 			return err
 		}
@@ -50,6 +52,44 @@ func SaveToFile(DetectResult []DetectResult, output string) (err error) {
 	return
 }
 
+func SaveToCsv(targetFingerRsts []DetectResult, outputFile string) error {
+	// 创建 CSV 文件
+	file, err := os.Create(outputFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// 写入表头
+	headers := []string{"host", "Origin URL", "Origin Title", "OriginUrlStatusCode", "SiteUp", "RedirectUrl", "RedirectWebTitle", "RedirectUrlStatusCode", "FingerTag"}
+	if err := writer.Write(headers); err != nil {
+		return err
+	}
+
+	// 写入数据
+	for _, target := range targetFingerRsts {
+		record := []string{
+			target.Host,
+			target.OriginUrl,
+			target.OriginWebTitle,
+			strconv.Itoa(target.OriginUrlStatusCode),
+			target.SiteUp,
+			target.RedirectUrl,
+			target.RedirectWebTitle,
+			strconv.Itoa(target.RedirectUrlStatusCode),
+			strings.Join(target.FingerTag, ", "),
+		}
+		if err := writer.Write(record); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func SaveToExcel(targetFingerRsts []DetectResult, outputFile string) error { // 创建新的 Excel 文件
 	f := excelize.NewFile()
 
@@ -72,7 +112,7 @@ func SaveToExcel(targetFingerRsts []DetectResult, outputFile string) error { // 
 	for row, target := range targetFingerRsts {
 		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row+2), target.Host)
 		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row+2), target.OriginUrl)
-		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row+2), target.WebTitle)
+		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row+2), target.OriginWebTitle)
 		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row+2), target.SiteUp)
 		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row+2), strings.Join(target.FingerTag, ", "))
 		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row+2), target.LastUpdateTime)

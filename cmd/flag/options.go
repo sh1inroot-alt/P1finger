@@ -10,10 +10,7 @@ type Options struct {
 	FingerOnly string
 
 	Debug bool
-
-	// fingers file
-	P1fingerFile string
-	Rate         int
+	Rate  int
 
 	Update bool
 	Output string

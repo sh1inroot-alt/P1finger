@@ -1,3 +1,3 @@
 package vars
 
-const P1fingerVer = "0.1.2"
+const P1fingerVer = "0.1.3"

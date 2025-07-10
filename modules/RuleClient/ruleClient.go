@@ -4,16 +4,13 @@ import (
 	"crypto/tls"
 	"github.com/P001water/P1finger/libs/p1httputils"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 )
 
 type RuleClient struct {
-	DefaultFingerPath     string                 // 默认指纹库路径
-	P1FingerPrints        FingerPrintsTdSafeType // P1finger指纹库
-	CustomizeFingerFiles  []string               // 可选 自定义指纹文件
-	UseDefaultFingerFiles bool                   // 可选 自定义指纹文件后是否启用默认指纹库
+	DefaultFingerPath string                 // 默认指纹库路径
+	P1FingerPrints    FingerPrintsTdSafeType // P1finger指纹库
+	RuleMode          string
 
 	ProxyUrl              string       // 可选 代理地址
 	ProxyClient           *http.Client // http客户端 默认跟随重定向
@@ -22,15 +19,12 @@ type RuleClient struct {
 	OutputFormat string // 可选 输出格式
 
 	DetectRstTdSafe DetectResultTdSafeType
-	RstShoot        DetectResultTdSafeType
-	RstMiss         DetectResultTdSafeType
-	RstReqFail      DetectResultTdSafeType
 }
 
 type RuleClientBuilder struct {
 	defaultFingerPath     string
 	useDefaultFingerFiles bool
-	customizeFingerFiles  []string
+	ruleMode              string
 	outputFormat          string
 	timeout               time.Duration
 	proxyURL              string
@@ -38,36 +32,27 @@ type RuleClientBuilder struct {
 
 func NewRuleClientBuilder() *RuleClientBuilder {
 	return &RuleClientBuilder{
-		customizeFingerFiles:  []string{},
-		useDefaultFingerFiles: true,   // 默认值
-		outputFormat:          "json", // 默认值
-		timeout:               5 * time.Second,
+		ruleMode:     "redteam",
+		outputFormat: "csv", // 默认值
+		timeout:      5 * time.Second,
 	}
+}
+
+var FingerFilesMap = map[string][]string{
+	"full":    {"Firewall.yaml,", "MailServer.yaml", "lowLevel.yaml", "fofa_fingerprints.yaml", "oaSystem.yaml", "other.yaml", "p1_fingerprints.yaml", "supply.yaml", "webApp.yaml"},
+	"redteam": {"Firewall.yaml,", "MailServer.yaml", "oaSystem.yaml", "webApp.yaml"},
 }
 
 func (b *RuleClientBuilder) Build() (_ *RuleClient, err error) {
 	r := &RuleClient{
-		DefaultFingerPath:     "P1fingersYaml",
-		UseDefaultFingerFiles: b.useDefaultFingerFiles,
-		CustomizeFingerFiles:  b.customizeFingerFiles,
-		OutputFormat:          b.outputFormat,
-		ProxyUrl:              b.proxyURL,
+		RuleMode:     b.ruleMode,
+		OutputFormat: b.outputFormat,
+		ProxyUrl:     b.proxyURL,
 	}
 
-	// 加载自定义指纹（如果有）
-	if len(r.CustomizeFingerFiles) > 0 {
-		err = r.LoadFingersFromFile(filepath.Dir(os.Args[0]), r.CustomizeFingerFiles)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// 加载默认指纹（如果需要）
-	if r.UseDefaultFingerFiles || len(r.CustomizeFingerFiles) == 0 {
-		err = r.LoadFingersFromExEfs()
-		if err != nil {
-			return nil, err
-		}
+	err = r.LoadFingersFromEXEFS(FingerFilesMap[r.RuleMode])
+	if err != nil {
+		return r, err
 	}
 
 	r.ProxyClient = p1httputils.NewHttpClientBuilder().
@@ -99,13 +84,13 @@ func (r *RuleClient) newProxyClientWithTimeout(timeout time.Duration) {
 	}
 }
 
-func (b *RuleClientBuilder) WithDefaultFingerFiles(val bool) *RuleClientBuilder {
-	b.useDefaultFingerFiles = val
+func (b *RuleClientBuilder) WithProxyURL(url string) *RuleClientBuilder {
+	b.proxyURL = url
 	return b
 }
 
-func (b *RuleClientBuilder) WithCustomizeFingerFile(files []string) *RuleClientBuilder {
-	b.customizeFingerFiles = files
+func (b *RuleClientBuilder) WithRuleMode(ruleMode string) *RuleClientBuilder {
+	b.ruleMode = ruleMode
 	return b
 }
 
@@ -116,10 +101,5 @@ func (b *RuleClientBuilder) WithOutputFormat(format string) *RuleClientBuilder {
 
 func (b *RuleClientBuilder) WithTimeout(t time.Duration) *RuleClientBuilder {
 	b.timeout = t
-	return b
-}
-
-func (b *RuleClientBuilder) WithProxyURL(url string) *RuleClientBuilder {
-	b.proxyURL = url
 	return b
 }

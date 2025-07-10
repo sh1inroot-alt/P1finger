@@ -8,8 +8,7 @@ import (
 )
 
 type P1fingerConf struct {
-	CustomizeFingerFiles  []string `yaml:"CustomizeFingerFiles"`
-	UseDefaultFingerFiles bool     `yaml:"UseDefaultFingerFiles"`
+	RuleMode string `yaml:"RuleMode"`
 
 	FofaCredentials struct {
 		Email  string `yaml:"Email"`
@@ -22,8 +21,7 @@ func LoadAppConf(filePath string, config *P1fingerConf) error {
 	_, err := os.Stat(filePath)
 	if os.IsNotExist(err) {
 		defaultConfig := P1fingerConf{
-			CustomizeFingerFiles:  []string{},
-			UseDefaultFingerFiles: true,
+			RuleMode: "redteam",
 			FofaCredentials: struct {
 				Email  string `yaml:"Email"`
 				ApiKey string `yaml:"ApiKey"`
@@ -34,29 +32,29 @@ func LoadAppConf(filePath string, config *P1fingerConf) error {
 		}
 		data, err := yaml.Marshal(&defaultConfig)
 		if err != nil {
-			return fmt.Errorf("生成默认配置时出错: %v", err)
+			return fmt.Errorf("An error occurred when generating the default configuration: %v", err)
 		}
 
 		err = os.WriteFile(filePath, data, 0644)
 		if err != nil {
-			return fmt.Errorf("无法创建文件并写入默认配置: %v", err)
+			return fmt.Errorf("It is impossible to create a file and write the default configuration: %v", err)
 		}
 
-		gologger.Info().Msgf("配置文件不存在，已在当前目录创建文件并写入默认配置")
-		gologger.Info().Msgf("文件路径: %s", filePath)
+		gologger.Info().Msgf("The configuration file does not exist. A file has been created in the current directory and the default configuration has been written")
+		gologger.Info().Msgf("File path: %s", filePath)
 		os.Exit(0)
 	} else if err != nil {
-		return fmt.Errorf("检查文件状态时出错: %v", err)
+		return fmt.Errorf("An error occurred when checking the file status: %v", err)
 	}
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return fmt.Errorf("无法读取配置文件: %v", err)
+		return fmt.Errorf("The configuration file cannot be read: %v", err)
 	}
 
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
-		return fmt.Errorf("解析配置文件时出错: %v", err)
+		return fmt.Errorf("An error occurred when parsing the configuration file: %v", err)
 	}
 
 	return nil

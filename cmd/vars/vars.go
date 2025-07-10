@@ -18,4 +18,7 @@ var (
 	ExecDir = filepath.Dir(os.Args[0])
 	FofaCli *FofaClient.FofaClient
 	AppConf P1fingerConf
+
+	RstChan chan RuleClient.DetectResult
+	Rsts    [][]string
 )

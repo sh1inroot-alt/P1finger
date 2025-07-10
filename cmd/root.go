@@ -12,7 +12,7 @@ import (
 func init() {
 	RootCmd.CompletionOptions.DisableDefaultCmd = true
 	RootCmd.PersistentFlags().StringVarP(&vars.Options.ProxyUrl, "proxy", "p", "", "proxy eg: [--proxy socks5://127.0.0.1]")
-	RootCmd.PersistentFlags().StringVarP(&vars.Options.Output, "output", "o", "p1finger.json", "output file name: [-o p1finger.xlsx] / [-o p1finger.json]")
+	RootCmd.PersistentFlags().StringVarP(&vars.Options.Output, "output", "o", "p1finger.csv", "output file name: [-o p1finger.csv] / [-o p1finger.json]")
 	RootCmd.PersistentFlags().BoolVar(&vars.Options.Debug, "debug", false, "http debug info, eg:[-debug]")
 }
 

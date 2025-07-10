@@ -2,6 +2,10 @@ package rule
 
 import (
 	"fmt"
+	"github.com/P001water/P1finger/libs/p1print"
+	"github.com/P001water/P1finger/libs/sliceopt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -9,8 +13,6 @@ import (
 	"github.com/P001water/P1finger/cmd/vars"
 	"github.com/P001water/P1finger/libs/fileutils"
 	"github.com/P001water/P1finger/modules/RuleClient"
-	"github.com/P001water/P1finger/modules/p1fmt"
-	"github.com/fatih/color"
 	"github.com/k0kubun/go-ansi"
 	"github.com/projectdiscovery/gologger"
 	"github.com/schollz/progressbar/v3"
@@ -22,15 +24,12 @@ func init() {
 
 	RuleCmd.Flags().StringVarP(&vars.Options.Url, "url", "u", "", "target url")
 	RuleCmd.Flags().StringVarP(&vars.Options.UrlFile, "file", "f", "", "target url file")
-	RuleCmd.Flags().IntVarP(&vars.Options.Rate, "rate", "r", 500, "The number of go coroutines")
+	RuleCmd.Flags().IntVar(&vars.Options.Rate, "rate", 500, "The number of go coroutines")
 }
 
 var RuleCmd = &cobra.Command{
 	Use:   "rule",
-	Short: "基于P1finger本地指纹库的指纹识别",
-	PreRun: func(cmd *cobra.Command, args []string) {
-
-	},
+	Short: "Fingerprint Detect based on the P1finger local fingerprint database",
 	Run: func(cmd *cobra.Command, args []string) {
 		err := RuleRun()
 		if err != nil {
@@ -40,48 +39,52 @@ var RuleCmd = &cobra.Command{
 	},
 }
 
+// 按照 OriginUrlStatusCode 对 DetectResult 切片进行排序
+type ByStatusCode []RuleClient.DetectResult
+
+func (a ByStatusCode) Len() int           { return len(a) }
+func (a ByStatusCode) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByStatusCode) Less(i, j int) bool { return a[i].OriginUrlStatusCode < a[j].OriginUrlStatusCode }
+
 func RuleRun() (err error) {
 
 	p1ruleClient, err := RuleClient.NewRuleClientBuilder().
+		WithRuleMode(vars.AppConf.RuleMode).
 		WithProxyURL(vars.Options.ProxyUrl).
-		WithCustomizeFingerFile(vars.AppConf.CustomizeFingerFiles).
-		WithDefaultFingerFiles(vars.AppConf.UseDefaultFingerFiles).
 		WithOutputFormat(vars.Options.Output).
 		WithTimeout(10 * time.Second).
 		Build()
 	if err != nil {
-		gologger.Error().Msgf("%v", err)
+		return
 	}
 
 	// 整合目标输入
-	var targetUrls []string
+	var targets []string
 	if vars.Options.Url != "" {
-		targetUrls = append(targetUrls, vars.Options.Url)
+		targets = append(targets, vars.Options.Url)
 	}
 
 	if vars.Options.UrlFile != "" {
 		var urlsFromFile []string
-		// filePath := filepath.Join(vars.ExecDir, vars.Options.UrlFile)
 		filePath := vars.Options.UrlFile
 		urlsFromFile, err = fileutils.ReadLinesFromFile(filePath)
 		if err != nil {
-			gologger.Error().Msgf("%v", err)
 			return
 		}
-		targetUrls = append(targetUrls, urlsFromFile...)
+		targets = append(targets, urlsFromFile...)
 	}
 
-	if len(targetUrls) <= 0 {
-		gologger.Error().Msg("input url is null")
-		return
+	if len(targets) <= 0 {
+		return fmt.Errorf("targets can't be null")
 	}
+	targets = sliceopt.SliceRmDuplication(targets)
 
-	bar := progressbar.NewOptions(len(targetUrls),
+	Progressbar := progressbar.NewOptions(len(targets),
 		progressbar.OptionSetWriter(ansi.NewAnsiStdout()),
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowBytes(true),
 		progressbar.OptionSetWidth(30),
-		progressbar.OptionSetDescription("[cyan][P1finger][reset] 检测进度..."),
+		progressbar.OptionSetDescription("[cyan][P1finger][reset] Detection progress..."),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "[green]=[reset]",
 			SaucerHead:    "[green]>[reset]",
@@ -90,63 +93,74 @@ func RuleRun() (err error) {
 			BarEnd:        "]",
 		}))
 
-	var workWg sync.WaitGroup
 	concurrency := vars.Options.Rate
-	urlChan := make(chan string, len(targetUrls))
+	var workWg sync.WaitGroup
+	urlChan := make(chan string, len(targets))
+	vars.RstChan = make(chan RuleClient.DetectResult, len(targets))
 
-	// 启动固定数量的 worker
-	for i := 0; i < concurrency; i++ {
-		go func() {
-			for url := range urlChan {
-				defer workWg.Done()
-				_, _ = p1ruleClient.Detect(url)
-				bar.Add(1)
-			}
-		}()
-	}
-
-	// 发送任务到 channel
-	for _, url := range targetUrls {
+	// 生产 - 发送任务到 channel
+	for _, url := range targets {
 		workWg.Add(1)
 		urlChan <- url
 	}
 
+	results := []RuleClient.DetectResult{}
+	go func() {
+		for r := range vars.RstChan {
+			results = append(results, r)
+			workWg.Done()
+		}
+	}()
+
+	// 消费-启动固定数量的 worker
+	for i := 0; i < concurrency; i++ {
+		go func() {
+			for consumerUrl := range urlChan {
+				defer workWg.Done()
+				dtctRst, err := p1ruleClient.Detect(consumerUrl)
+				if err != nil {
+					dtctRst.OriginUrlStatusCode = 999
+					workWg.Add(1)
+					vars.RstChan <- dtctRst
+					return
+				}
+				workWg.Add(1)
+				vars.RstChan <- dtctRst
+				Progressbar.Add(1)
+			}
+		}()
+	}
+
 	close(urlChan)
 	workWg.Wait()
-	bar.Finish()
+	Progressbar.Finish()
 	fmt.Println()
 
-	for _, shoot := range p1ruleClient.RstShoot.GetElements() {
-		prefix := color.New(color.FgGreen).Add(color.Bold).Sprintf("[已命中]")
-		// P1finger的指纹还在清洗阶段，区分生产和测试模式，清洗指纹
-		if vars.Options.Debug {
-			p1fmt.PrintfShoot(prefix, shoot.OriginUrl, shoot.WebTitle, shoot.FingerTag, shoot.OriginUrlStatusCode)
+	sort.Sort(ByStatusCode(results))
+
+	Reset := "\033[0m"  // 重置颜色
+	Green := "\033[32m" // 绿色
+	Red := "\033[31m"   // 绿色
+	for _, r := range results {
+		statusColor := statusCodeColor(r.OriginUrlStatusCode)
+		fingerTags := strings.Join(r.FingerTag, ",")
+		if len(r.RedirectUrl) > 0 {
+			fmt.Printf("%s %s [%s] Redirect to %v [%v] %s%s%s\n", statusColor, r.OriginUrl, r.OriginWebTitle, r.RedirectUrl, r.RedirectWebTitle, Green, fingerTags, Reset)
+		} else if r.OriginUrlStatusCode == 999 {
+			fmt.Printf("%s %s Error:%s%s%s\n", statusColor, r.OriginUrl, Red, fingerTags, Reset)
+		} else if len(r.FingerTag) > 0 {
+			fmt.Printf("%s %s [%s] %s%s%s\n", statusColor, r.OriginUrl, r.OriginWebTitle, Green, fingerTags, Reset)
 		} else {
-			p1fmt.PrintfShoot(prefix, shoot.OriginUrl, shoot.WebTitle, RuleClient.SliceRmDuplication(shoot.FingerTag), shoot.OriginUrlStatusCode)
-		}
-
-	}
-
-	for _, miss := range p1ruleClient.RstMiss.GetElements() {
-		prefix := color.New(color.FgRed).Add(color.Bold).Sprintf("[未命中]")
-		if vars.Options.Debug {
-			p1fmt.PrintMiss(prefix, miss.OriginUrl, miss.WebTitle, miss.FingerTag, miss.OriginUrlStatusCode)
-		} else {
-			p1fmt.PrintMiss(prefix, miss.OriginUrl, miss.WebTitle, RuleClient.SliceRmDuplication(miss.FingerTag), miss.OriginUrlStatusCode)
-		}
-	}
-
-	for _, reqFail := range p1ruleClient.RstReqFail.GetElements() {
-		prefix := color.New(color.FgBlue).Add(color.Bold).Sprintf("[无法访问]")
-
-		if vars.Options.Debug {
-			p1fmt.PrintReqFail(prefix, reqFail.OriginUrl, reqFail.FingerTag)
-		} else {
-			p1fmt.PrintReqFail(prefix, reqFail.OriginUrl, RuleClient.SliceRmDuplication(reqFail.FingerTag))
+			fmt.Printf("%s %s [%s]\n", statusColor, r.OriginUrl, r.OriginWebTitle)
 		}
 	}
 
-	err = RuleClient.SaveToFile(p1ruleClient.DetectRstTdSafe.GetElements(), p1ruleClient.OutputFormat)
+	p1print.Debugf("从文件导入目标总数：%v\n", len(targets))
+	p1print.Debugf("文件导入去重后目标总数：%v\n", len(sliceopt.SliceRmDuplication(targets)))
+	p1print.Debugf("管道已经检查目标总数：%v\n", len(p1ruleClient.DetectRstTdSafe.GetElements()))
+
+	// save to file
+	err = RuleClient.SaveToFile(results, p1ruleClient.OutputFormat)
 	if err != nil {
 		gologger.Error().Msg(err.Error())
 		return
@@ -154,4 +168,20 @@ func RuleRun() (err error) {
 
 	return
 
+}
+
+// 根据状态码返回颜色化的字符串
+func statusCodeColor(statusCode int) string {
+	switch {
+	case statusCode >= 200 && statusCode < 300:
+		return "\033[32m" + fmt.Sprintf("[%d]", statusCode) + "\033[0m" // 绿色
+	case statusCode >= 300 && statusCode < 400:
+		return "\033[34m" + fmt.Sprintf("[%d]", statusCode) + "\033[0m" // 蓝色
+	case statusCode >= 400 && statusCode < 500:
+		return "\033[33m" + fmt.Sprintf("[%d]", statusCode) + "\033[0m" // 黄色
+	case statusCode >= 500:
+		return "\033[31m" + fmt.Sprintf("[%d]", statusCode) + "\033[0m" // 红色
+	default:
+		return fmt.Sprintf("[%d]", statusCode)
+	}
 }

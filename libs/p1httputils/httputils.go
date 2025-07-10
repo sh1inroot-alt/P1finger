@@ -26,7 +26,7 @@ var (
 	errorsClientTimeoutExceeded = errors.New(clientTimeoutExceeded)
 )
 
-type P1fingerHttpResp struct {
+type HttpRespUtils struct {
 	Url           string
 	StatusCode    int
 	ContentLength string
@@ -51,7 +51,7 @@ func NewRequest(method, url string, body io.Reader) (*http.Request, error) {
 	return req, nil
 }
 
-func HttpGet(URL string, customClient *http.Client) (resp *http.Response, CusResp P1fingerHttpResp, err error) {
+func HttpGet(URL string, customClient *http.Client) (resp *http.Response, CusResp HttpRespUtils, err error) {
 	// to check if use proxy
 	httpClient := customClient
 
@@ -75,14 +75,14 @@ func HttpGet(URL string, customClient *http.Client) (resp *http.Response, CusRes
 
 	CusResp.Url = response.Request.URL.String()
 
-	err = HandleResp2P1fingerResp(response, &CusResp)
+	err = HandleResp2RespUtils(response, &CusResp)
 	if err != nil {
 		return
 	}
 	return response, CusResp, nil
 }
 
-func HandleResp2P1fingerResp(response *http.Response, CusResp *P1fingerHttpResp) (err error) {
+func HandleResp2RespUtils(response *http.Response, CusResp *HttpRespUtils) (err error) {
 
 	CusResp.StatusCode = response.StatusCode
 
@@ -119,7 +119,7 @@ func HandleResp2P1fingerResp(response *http.Response, CusResp *P1fingerHttpResp)
 	return
 }
 
-func CheckPageRedirect(resp *http.Response, p1fingerResp P1fingerHttpResp) (string, string, bool) {
+func CheckPageRedirect(resp *http.Response, respUtils HttpRespUtils) (string, string, bool) {
 
 	var redirectType string
 	loc := resp.Header.Get("Location")
@@ -132,15 +132,16 @@ func CheckPageRedirect(resp *http.Response, p1fingerResp P1fingerHttpResp) (stri
 	}
 
 	// 检测HTML中的 <meta http-equiv="Refresh" content="..."> 标签
-	metaRegex := regexp.MustCompile(`<meta\s+http-equiv=["']?Refresh["']?\s+content=["']?[^"']*URL=([^\s"']+)["']?`)
-	if metaMatch := metaRegex.FindStringSubmatch(p1fingerResp.BodyStr); metaMatch != nil {
-		redirectType = "jsRedirect"
+	// <meta http-equiv="refresh" content="0;url=https://wj.sjtu.edu.cn/q/5xsumGi3"/>
+	metaRegex := regexp.MustCompile(`(?i)<meta\s+http-equiv=["']?refresh["']?\s+content=["']?[^"'>]*url=([^"'\s>]+)`)
+	if metaMatch := metaRegex.FindStringSubmatch(respUtils.BodyStr); metaMatch != nil {
+		redirectType = "metaRefresh"
 		return redirectType, metaMatch[1], true
 	}
 
 	// 检测JavaScript中的 window.location.href 或 window.location.replace()
 	jsRegex := regexp.MustCompile(`window\.location\.(href|replace)\s*\(\s*["']([^"']+)["']`)
-	if jsMatch := jsRegex.FindStringSubmatch(p1fingerResp.BodyStr); jsMatch != nil {
+	if jsMatch := jsRegex.FindStringSubmatch(respUtils.BodyStr); jsMatch != nil {
 		redirectType = "jsRedirect"
 		return redirectType, jsMatch[2], true
 	}

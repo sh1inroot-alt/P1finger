@@ -4,11 +4,11 @@ import (
 	"github.com/P001water/P1finger/cmd"
 	"github.com/P001water/P1finger/cmd/vars"
 	"github.com/P001water/P1finger/libs/fileutils"
+	"github.com/P001water/P1finger/libs/sliceopt"
 	"github.com/P001water/P1finger/modules/FofaClient"
 	"github.com/P001water/P1finger/modules/RuleClient"
 	"github.com/projectdiscovery/gologger"
 	"github.com/spf13/cobra"
-	"path/filepath"
 	"strings"
 )
 
@@ -25,11 +25,10 @@ func init() {
 
 var fofaCmd = &cobra.Command{
 	Use:   "fofa",
-	Short: "基于Fofa空间测绘引擎的指纹识别",
-	Long:  "基于Fofa的指纹识别",
+	Short: "Fingerprint Detect based on the Fofa cyberspace mapping engine.",
+	Long:  "Fingerprint Detect based on the Fofa cyberspace mapping engine.",
 	Run: func(cmd *cobra.Command, args []string) {
 		gologger.Info().Msgf("p1fingeprint detect model: Fofa\n")
-
 		err := fofaAction()
 		if err != nil {
 			gologger.Error().Msg(err.Error())
@@ -39,28 +38,25 @@ var fofaCmd = &cobra.Command{
 }
 
 func fofaAction() (err error) {
-
-	// 整合目标输入
-	var targetUrls []string
+	var targets []string
 	if vars.Options.Url != "" {
-		targetUrls = append(targetUrls, vars.Options.Url)
+		targets = append(targets, vars.Options.Url)
 	}
-
 	if vars.Options.UrlFile != "" {
 		var urlsFromFile []string
-		filePath := filepath.Join(vars.ExecDir, vars.Options.UrlFile)
+		filePath := vars.Options.UrlFile
 		urlsFromFile, err = fileutils.ReadLinesFromFile(filePath)
 		if err != nil {
-			gologger.Error().Msgf("%v", err)
 			return
 		}
-		targetUrls = append(targetUrls, urlsFromFile...)
+		targets = append(targets, urlsFromFile...)
 	}
 
-	if len(targetUrls) <= 0 {
+	if len(targets) <= 0 {
 		gologger.Error().Msg("input url is null")
 		return
 	}
+	targets = sliceopt.SliceRmDuplication(targets)
 
 	vars.FofaCli, err = FofaClient.NewClient(
 		FofaClient.WithURL("https://fofa.info/?email=&key=&version=v1"),
@@ -74,7 +70,7 @@ func fofaAction() (err error) {
 	var group []string
 	var FinalQuery []string
 	var querybeautify []string
-	domains, ips := FofaClient.SplitDomainsAndIPs(targetUrls)
+	domains, ips := FofaClient.SplitDomainsAndIPs(targets)
 	querybeautify = append(querybeautify, domains...)
 	querybeautify = append(querybeautify, ips...)
 	for i, simpleQuery := range querybeautify {
@@ -98,7 +94,7 @@ func fofaAction() (err error) {
 			tmp := RuleClient.DetectResult{
 				OriginUrl:      simpleTarget[5] + "://" + simpleTarget[0] + ":" + simpleTarget[1],
 				Host:           simpleTarget[6],
-				WebTitle:       simpleTarget[2],
+				OriginWebTitle: simpleTarget[2],
 				FingerTag:      strings.Split(simpleTarget[3], ","),
 				LastUpdateTime: simpleTarget[4],
 			}

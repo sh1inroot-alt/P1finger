@@ -19,8 +19,7 @@ var listCmd = &cobra.Command{
 	Short: "列出所有指纹的ID和Name",
 	Run: func(cmd *cobra.Command, args []string) {
 		p1ruleClient, err := RuleClient.NewRuleClientBuilder().
-			WithCustomizeFingerFile(vars.AppConf.CustomizeFingerFiles).
-			WithDefaultFingerFiles(vars.AppConf.UseDefaultFingerFiles).
+			WithRuleMode(vars.AppConf.RuleMode).
 			WithOutputFormat(vars.Options.Output).
 			WithTimeout(10 * time.Second).
 			Build()

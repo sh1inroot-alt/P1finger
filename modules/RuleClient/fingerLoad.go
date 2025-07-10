@@ -4,36 +4,31 @@ import (
 	"embed"
 	"fmt"
 	"gopkg.in/yaml.v3"
-	"os"
 	"path/filepath"
 )
 
-//go:embed P1fingersYaml/*
+//go:embed P1fingersYaml
 var ExeFs embed.FS
 
-func (r *RuleClient) LoadFingersFromFile(exeDir string, fingerFiles []string) (err error) {
+func (r *RuleClient) LoadFingersFromEXEFS(fingerFiles []string) (err error) {
 
 	for _, file := range fingerFiles {
-		filePath := filepath.Join(exeDir, file)
-		fileInf, err := os.Stat(filePath)
-		if err != nil {
-			return fmt.Errorf("❌ File %s not existing:", file)
-		}
-
+		//filePath := filepath.Join(exeDir, file)
 		if filepath.Ext(file) == ".yaml" {
-			fileBytes, err := os.ReadFile(filePath)
+			t := "P1fingersYaml" + "/" + file // embed pkg must use "/"
+			fileBytes, err := ExeFs.ReadFile(t)
 			if err != nil {
-				return fmt.Errorf("❌ 无法读取文件:", fileInf.Name(), err)
+				return fmt.Errorf("❌ 无法读取文件: %v, %v", file, err)
 			}
 
 			var newFingerprints []FingerprintsType
 			err = yaml.Unmarshal(fileBytes, &newFingerprints)
 			if err != nil {
-				return fmt.Errorf("❌ 解析 YAML 失败:", fileInf.Name(), err)
+				return fmt.Errorf("❌ 解析 YAML 失败: %v, %v", file, err)
 			}
 
 			for _, fingerprint := range newFingerprints {
-				fingerprint.FingerFile = filepath.Base(fileInf.Name())
+				fingerprint.FingerFile = filepath.Base(file)
 			}
 
 			r.P1FingerPrints.FingerSlice = append(r.P1FingerPrints.FingerSlice, newFingerprints...)
