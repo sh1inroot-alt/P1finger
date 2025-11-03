@@ -20,7 +20,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.20'  # 改为你需要的版本
+          go-version: 'stable'  # 改为你需要的版本
           cache: true
 
       # 下载依赖
