@@ -59,7 +59,7 @@ jobs:
           GOOS=${{ matrix.target.os }}
           GOARCH=${{ matrix.target.arch }}
           # 执行编译
-          go build -o $OUTPUT_NAME ./cmd/myapp  # 替换为你的 main 包路径（如 ./ 或 ./main.go）
+          go build -o $OUTPUT_NAME ./ # 替换为你的 main 包路径（如 ./ 或 ./main.go）
         env:
           CGO_ENABLED: 0  # 禁用 CGO，避免跨平台依赖问题
 
