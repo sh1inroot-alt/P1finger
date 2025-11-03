@@ -59,7 +59,7 @@ func fofaAction() (err error) {
 	targets = sliceopt.SliceRmDuplication(targets)
 
 	vars.FofaCli, err = FofaClient.NewClient(
-		FofaClient.WithURL("https://fofa.info/?email=&key=&version=v1"),
+		FofaClient.WithURL("https://fofa.icu/?email=&key=&version=v1"),
 		FofaClient.WithAccountDebug(true),
 		FofaClient.WithDebug(vars.Options.Debug),
 		FofaClient.WithEmail(vars.AppConf.FofaCredentials.Email),
