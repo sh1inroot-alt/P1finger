@@ -1,59 +1,43 @@
-name: Build Go Project
+name: Build Windows Executable
 
-# 触发条件：推送到 main 分支或创建 Pull Request 时
+# 触发条件：推送到 master 分支或提交 PR 到 master 分支
 on:
   push:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
-jobs:
-  build:
-    name: Build
-    # 运行环境：选择 Ubuntu、macOS、Windows（可多平台并行）
-    runs-on: ${{ matrix.os }}
-    strategy:
-      # 多平台矩阵：定义目标 OS 和架构
-      matrix:
-        os: [windows-latest]
-        go-version: ['1.22']  # 指定 Go 版本
-        # 交叉编译目标（根据需要增删）
-        target:
-          - os: windows
-            arch: amd64
-            suffix: ".exe"
 
+jobs:
+  build-windows:
+    name: Build for Windows
+    runs-on: windows-latest  # 仅使用 Windows 环境
     steps:
-      # 步骤 1：拉取代码到运行环境
+      # 拉取代码
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 步骤 2：安装 Go 环境
+      # 安装 Go 1.20（根据你的需求指定版本）
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go-version }}
-          cache: true  # 缓存依赖，加速构建
+          go-version: '1.20'  # 改为你需要的版本
+          cache: true
 
-      # 步骤 3：下载依赖
+      # 下载依赖
       - name: Download dependencies
         run: go mod tidy
 
-      # 步骤 4：编译（交叉编译）
-      - name: Build
+      # 编译 Windows 可执行文件（64位）
+      - name: Build Windows executable
         run: |
-          # 定义输出文件名（格式：项目名-OS-架构）
-          OUTPUT_NAME="myapp-${{ matrix.target.os }}-${{ matrix.target.arch }}${{ matrix.target.suffix }}"
-          # 设置交叉编译环境变量
-          GOOS=${{ matrix.target.os }}
-          GOARCH=${{ matrix.target.arch }}
-          # 执行编译
-          go build -o $OUTPUT_NAME ./ # 替换为你的 main 包路径（如 ./ 或 ./main.go）
-        env:
-          CGO_ENABLED: 0  # 禁用 CGO，避免跨平台依赖问题
+          # 定义输出文件名（带 .exe 后缀）
+          $outputName = "myapp-windows-amd64.exe"
+          # 编译（默认就是 Windows 平台，无需额外设置 GOOS）
+          go build -o $outputName ./  # 替换为你的 main 包路径（如 ./ 或 ./src）
 
-      # 步骤 5：上传编译产物作为 Artifact（便于下载测试）
-      - name: Upload artifacts
+      # 上传编译产物
+      - name: Upload Windows executable
         uses: actions/upload-artifact@v4
         with:
-          name: myapp-${{ matrix.target.os }}-${{ matrix.target.arch }}
-          path: myapp-${{ matrix.target.os }}-${{ matrix.target.arch }}${{ matrix.target.suffix }}
+          name: windows-executable
+          path: myapp-windows-amd64.exe  # 和上面的输出文件名保持一致
