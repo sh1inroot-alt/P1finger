@@ -3,10 +3,9 @@ name: Build Go Project
 # 触发条件：推送到 main 分支或创建 Pull Request 时
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "master" ]
   pull_request:
-    branches: [ "main" ]
-
+    branches: [ "master" ]
 jobs:
   build:
     name: Build
